@@ -121,3 +121,21 @@ func (s *Storage) User(
 	}
 	return user, nil
 }
+
+func (s *Storage) DeleteUser(
+	ctx context.Context,
+	userID string,
+	) (string,error){
+	const op = "postgres.DeleteUser"
+
+	query:=`
+		DELETE 
+		FROM users 
+		WHERE id = $1`
+
+	if err:=s.db.Exec(query,userID);err!=nil{
+		return "",fmt.Errorf("%s:%w",op,err)	
+	}
+
+	return userID,nil
+}
