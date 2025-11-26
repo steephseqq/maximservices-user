@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"user/internal/domain/models"
@@ -20,19 +21,14 @@ type Storage struct {
 }
 
 func MustLoad() *Storage {
-	connString := os.Getenv("DB_URL")
-	if connString == "" {
-		panic("connString is required")
-	}
-
-	storage, err := New(connString)
+	storage, err := New()
 	if err != nil {
 		panic(err)
 	}
 	return storage
 }
 
-func New(storagePath string) (*Storage, error) {
+func New() (*Storage, error) {
 	const op = "storage.postgres.New"
 
 	dbURL := os.Getenv("DB_URL")
@@ -57,11 +53,11 @@ func (s *Storage) SaveUser(
 	query := `
 		INSERT
 		INTO users
-		(uuid,email,username,name,avatar_url,last_seen)
+		(id,email,username,name,avatar_url,last_seen)
 		VALUES ($1,$2,$3,$4,$5,$6)`
 
 	_, err = s.db.Exec(query,
-		u.UUID, u.Email, u.Username, u.Name, u.AvatarURL, time.Now())
+		u.ID, u.Email, u.Username, u.Name, u.AvatarURL, time.Now())
 	if err != nil {
 		var pgErr *pq.Error
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -81,7 +77,7 @@ func (s *Storage) RemoveUser(
 	query := `
 		DELETE
 		FROM users
-		WHERE uuid=$1`
+		WHERE id=$1`
 
 	result, err := s.db.Exec(query, uuid)
 	if err != nil {
@@ -105,7 +101,7 @@ func (s *Storage) User(
 	const op = "storage.postgres.User"
 
 	query := `SELECT
-		uuid,
+		id,
 		username,
 		pass_hash
 		FROM users
@@ -120,4 +116,26 @@ func (s *Storage) User(
 		return models.User{}, fmt.Errorf("%s:%w", op, err)
 	}
 	return user, nil
+}
+
+func (s *Storage) Users(
+	ctx context.Context,
+	userIDs, fields []string,
+	parameter string,
+) ([]models.User, error) {
+	const op = "postgres.Users"
+
+	query := fmt.Sprintf(
+		`SELECT %s
+		 FROM users
+		 WHERE %s = ANY($1)
+		`, strings.Join(fields, ","), parameter,
+	)
+
+	var users []models.User
+	if err := s.db.Select(&users, query, userIDs); err != nil {
+		return nil, fmt.Errorf("%s:%w", op, err)
+	}
+
+	return users, nil
 }

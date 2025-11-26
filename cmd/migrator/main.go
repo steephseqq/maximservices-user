@@ -17,8 +17,8 @@ func main() {
 		panic(err)
 	}
 	var migrationPath, migrationsTable string
-	flag.StringVar(&migrationPath, "migrations_path", "", "path to migrations")
-	flag.StringVar(&migrationsTable, "migrations_table", "", "path to migrations table")
+	flag.StringVar(&migrationPath, "migrations-path", "", "path to migrations")
+	flag.StringVar(&migrationsTable, "migrations-table", "", "path to migrations table")
 	flag.Parse()
 
 	storagePath := os.Getenv("DB_URL")

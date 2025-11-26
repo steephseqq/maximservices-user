@@ -20,6 +20,11 @@ type UserServiceGRPC interface {
 		ctx context.Context,
 		uuid string,
 	) (err error)
+	Users(
+		ctx context.Context,
+		userIDs, fields []string,
+		parameter string,
+	) ([]*userpb.UserEntity, error)
 }
 
 type serverAPI struct {
@@ -73,5 +78,33 @@ func (s *serverAPI) DeleteUser(
 	}
 	return &userpb.DeleteUserResponse{
 		Success: true,
+	}, nil
+}
+
+func (s *serverAPI) GetUsers(
+	ctx context.Context,
+	req *userpb.GetUsersRequest,
+) (*userpb.GetUserResponse, error) {
+	var fields, userIDs []string
+	var parameter string
+	if fields = req.GetFields(); fields == nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid argument")
+	}
+
+	if userIDs = req.GetUserIDs(); userIDs == nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid argument")
+	}
+
+	if parameter = req.GetParameter(); parameter == "" {
+		return nil, status.Error(codes.InvalidArgument, "invalid argument")
+	}
+
+	users, err := s.user.Users(ctx, userIDs, fields, parameter)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "internal error")
+	}
+
+	return &userpb.GetUserResponse{
+		Users: users,
 	}, nil
 }

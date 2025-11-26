@@ -9,7 +9,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/steephseqq/maximlibs v0.0.1
-	github.com/steephseqq/maximprotos-user v0.0.5
+	github.com/steephseqq/maximprotos-user v0.0.10
 	google.golang.org/grpc v1.76.0
 )
 
