@@ -20,11 +20,13 @@ type UserServiceGRPC interface {
 		ctx context.Context,
 		uuid string,
 	) (err error)
-	Users(
+	UsersFromIDs(
 		ctx context.Context,
-		fields []string,
-		userIDs interface{},
-		parameter string,
+		userIDs []string,
+	) ([]*userpb.UserEntity, error)
+	UsersFromUsername(
+		ctx context.Context,
+		username string,
 	) ([]*userpb.UserEntity, error)
 }
 
@@ -86,21 +88,20 @@ func (s *serverAPI) GetUsers(
 	ctx context.Context,
 	req *userpb.GetUsersRequest,
 ) (*userpb.GetUserResponse, error) {
-	var fields, userIDs []string
-	var parameter string
-	if fields = req.GetFields(); fields == nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid argument")
+
+	var (
+		identified = req.GetIdentifier()
+		users      []*userpb.UserEntity
+		err        error
+	)
+
+	switch v := identified.(type) {
+	case *userpb.GetUsersRequest_UserIdList:
+		users, err = s.user.UsersFromIDs(ctx, v.UserIdList.UserIds)
+	case *userpb.GetUsersRequest_Username:
+		users, err = s.user.UsersFromUsername(ctx, v.Username)
 	}
 
-	if userIDs = req.GetUserIDs(); userIDs == nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid argument")
-	}
-
-	if parameter = req.GetParameter(); parameter == "" {
-		return nil, status.Error(codes.InvalidArgument, "invalid argument")
-	}
-
-	users, err := s.user.Users(ctx, userIDs, fields, parameter)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "internal error")
 	}

@@ -2,18 +2,13 @@ package user
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 	"user/internal/domain/models"
-	"user/internal/storage"
 
 	"github.com/steephseqq/maximlibs/logger/sl"
-	userpb "github.com/steephseqq/maximprotos-user/gen/go/user"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type UserService struct {
@@ -46,12 +41,8 @@ type UserDeleter interface {
 
 type UserProvider interface {
 	User(ctx context.Context, email string) (models.User, error)
-	Users(
-		ctx context.Context,
-		fields []string,
-		userID interface{},
-		parameter string,
-	) ([]models.User, error)
+	Users(ctx context.Context, userIDs []string) ([]models.User, error)
+	UsersFromUsername(ctx context.Context, username string) ([]models.User, error)
 }
 
 func New(
@@ -111,82 +102,4 @@ func (s *UserService) DeleteUser(
 		return err
 	}
 	return nil
-}
-
-var usersFields = map[string]bool{
-	"id":         true,
-	"name":       true,
-	"username":   true,
-	"bio":        true,
-	"avatar_url": true,
-	"last_seen":  true,
-}
-
-var usersParameters = map[string]bool{
-	"id":       true,
-	"username": true,
-}
-
-func (s *UserService) Users(
-	ctx context.Context,
-	fields []string,
-	userID interface{},
-	parameter string,
-) ([]*userpb.UserEntity, error) {
-	const op = "user.Users"
-
-	log := s.log.With(
-		slog.String("op", op),
-	)
-
-	log.Info("attemping to get users")
-
-	validFields := make([]string, 0, len(fields))
-	for _, field := range fields {
-		if usersFields[field] {
-			validFields = append(validFields, field)
-		}
-	}
-
-	if !usersParameters[parameter] {
-		log.Warn("invalid parameter")
-		return nil, fmt.Errorf("%s:%w", op, ErrInvalidParameter)
-	}
-
-	if len(validFields) == 0 {
-		log.Info("valied fields count = 0")
-		return nil, fmt.Errorf("%s:%w", op, ErrInvalidFields)
-	}
-
-	usersDB, err := s.usrProvier.Users(ctx, fields, userID, parameter)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("%s:%w", op, storage.ErrUserNotFound)
-		}
-
-		log.Error("failed to get users:", sl.Err(err))
-		return nil, fmt.Errorf("%s:%w", op, err)
-	}
-
-	usersPB := make([]*userpb.UserEntity, len(usersDB))
-
-	for i := range usersDB {
-		user := &userpb.UserEntity{
-			Id:        &usersDB[i].ID,
-			Username:  &usersDB[i].Username,
-			Name:      &usersDB[i].Name,
-			Bio:       &usersDB[i].Bio,
-			AvatarUrl: &usersDB[i].AvatarURL,
-			LastSeen:  &usersDB[i].LastSeen,
-		}
-		usersPB = append(usersPB, user)
-	}
-
-	if len(usersPB) == 0 {
-		log.Info("usersPB count = 0")
-		return nil, status.Error(codes.InvalidArgument, "invalid argument")
-	}
-
-	log.Info("getting users is successfully")
-	return usersPB, nil
 }
