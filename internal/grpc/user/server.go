@@ -22,7 +22,8 @@ type UserServiceGRPC interface {
 	) (err error)
 	Users(
 		ctx context.Context,
-		userIDs, fields []string,
+		fields []string,
+		userIDs interface{},
 		parameter string,
 	) ([]*userpb.UserEntity, error)
 }

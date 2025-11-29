@@ -120,20 +120,51 @@ func (s *Storage) User(
 
 func (s *Storage) Users(
 	ctx context.Context,
-	userIDs, fields []string,
+	fields []string,
+	userID interface{},
 	parameter string,
 ) ([]models.User, error) {
 	const op = "postgres.Users"
 
-	query := fmt.Sprintf(
-		`SELECT %s
-		 FROM users
-		 WHERE %s = ANY($1)
-		`, strings.Join(fields, ","), parameter,
+	var (
+		query string
+		args  interface{}
 	)
 
+	baseQuery := fmt.Sprintf(`
+		SELECT %s
+		FROM users
+		WHERE `, strings.Join(fields, ","))
+
+	switch parameter {
+	case "id":
+		ids, ok := userID.([]string)
+		if !ok {
+			return nil, errors.New("invalid userIDs")
+		}
+		query = baseQuery + "id = ANY($1)"
+		args = pq.Array(ids)
+
+	case "username":
+		switch v := userID.(type) {
+		case string:
+			query = baseQuery + "username LIKE $1"
+			args = "%" + v + "%"
+
+		case []string:
+			query = baseQuery + "username = ANY($1)"
+			args = pq.Array(userID)
+		default:
+			return nil, fmt.Errorf("%s:%w", op, storage.ErrInvalidArgument)
+		}
+
+	default:
+		return nil, fmt.Errorf("%s:%w", op, storage.ErrInvalidArgument)
+	}
+
 	var users []models.User
-	if err := s.db.Select(&users, query, userIDs); err != nil {
+
+	if err := s.db.SelectContext(ctx, &users, query, args); err != nil {
 		return nil, fmt.Errorf("%s:%w", op, err)
 	}
 

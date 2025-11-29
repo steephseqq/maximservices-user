@@ -25,7 +25,7 @@ type UserService struct {
 }
 
 var (
-	ErrInvalidFields      = errors.New("Invalid fields")
+	ErrInvalidFields      = errors.New("invalid fields")
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrInvalidParameter   = errors.New("invalid parameter")
 )
@@ -46,7 +46,12 @@ type UserDeleter interface {
 
 type UserProvider interface {
 	User(ctx context.Context, email string) (models.User, error)
-	Users(ctx context.Context, userIDs, fields []string, parameter string) ([]models.User, error)
+	Users(
+		ctx context.Context,
+		fields []string,
+		userID interface{},
+		parameter string,
+	) ([]models.User, error)
 }
 
 func New(
@@ -95,7 +100,14 @@ func (s *UserService) DeleteUser(
 ) (err error) {
 	const op = "services.user.DeleteUser"
 
+	log := s.log.With(
+		slog.String("op", op),
+	)
+
+	log.Info("attemping to delete user")
+
 	if err := s.usrDeleter.RemoveUser(ctx, uuid); err != nil {
+		log.Error("failed to delete user", sl.Err(err))
 		return err
 	}
 	return nil
@@ -117,7 +129,8 @@ var usersParameters = map[string]bool{
 
 func (s *UserService) Users(
 	ctx context.Context,
-	userIDs, fields []string,
+	fields []string,
+	userID interface{},
 	parameter string,
 ) ([]*userpb.UserEntity, error) {
 	const op = "user.Users"
@@ -145,7 +158,7 @@ func (s *UserService) Users(
 		return nil, fmt.Errorf("%s:%w", op, ErrInvalidFields)
 	}
 
-	usersDB, err := s.usrProvier.Users(ctx, userIDs, fields, parameter)
+	usersDB, err := s.usrProvier.Users(ctx, fields, userID, parameter)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%s:%w", op, storage.ErrUserNotFound)
@@ -158,7 +171,7 @@ func (s *UserService) Users(
 	usersPB := make([]*userpb.UserEntity, len(usersDB))
 
 	for i := range usersDB {
-		user := userpb.UserEntity{
+		user := &userpb.UserEntity{
 			Id:        &usersDB[i].ID,
 			Username:  &usersDB[i].Username,
 			Name:      &usersDB[i].Name,
@@ -166,7 +179,7 @@ func (s *UserService) Users(
 			AvatarUrl: &usersDB[i].AvatarURL,
 			LastSeen:  &usersDB[i].LastSeen,
 		}
-		usersPB = append(usersPB, &user)
+		usersPB = append(usersPB, user)
 	}
 
 	if len(usersPB) == 0 {
